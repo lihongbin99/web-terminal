@@ -27,7 +27,16 @@
             <h1>Select Working Directory</h1>
             <div class="dir-input-group">
                 <input type="text" id="dir-input" placeholder="Enter directory path (e.g. D:\Code\MyProject)">
+                <button id="dir-browse-btn" type="button">Browse</button>
                 <button id="dir-go-btn" type="button">Open</button>
+            </div>
+            <div id="dir-browser" style="display:none;">
+                <div id="dir-breadcrumb" class="dir-breadcrumb"></div>
+                <div id="dir-browser-list" class="dir-browser-list"></div>
+                <div class="dir-browser-actions">
+                    <button id="dir-confirm-btn" type="button">Confirm</button>
+                    <button id="dir-close-btn" type="button" class="dir-close">Close</button>
+                </div>
             </div>
             <div id="dir-list"></div>
             <button id="dir-default-btn" type="button" class="dir-default">Use Default Directory</button>

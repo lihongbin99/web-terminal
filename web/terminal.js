@@ -68,6 +68,108 @@
         document.getElementById('dir-default-btn').onclick = () => {
             openTerminal(token, '');
         };
+
+        // Browse button
+        let browsePath = '';
+        const browserEl = document.getElementById('dir-browser');
+        const browserListEl = document.getElementById('dir-browser-list');
+        const breadcrumbEl = document.getElementById('dir-breadcrumb');
+
+        document.getElementById('dir-browse-btn').onclick = () => {
+            browsePath = '';
+            browserEl.style.display = 'block';
+            loadBrowseDir(token);
+        };
+
+        document.getElementById('dir-close-btn').onclick = () => {
+            browserEl.style.display = 'none';
+        };
+
+        document.getElementById('dir-confirm-btn').onclick = () => {
+            if (browsePath) {
+                document.getElementById('dir-input').value = browsePath;
+            }
+            browserEl.style.display = 'none';
+        };
+
+        async function loadBrowseDir(tkn) {
+            browserListEl.innerHTML = '';
+            updateBreadcrumb();
+
+            try {
+                const url = `/api/browse?token=${encodeURIComponent(tkn)}&path=${encodeURIComponent(browsePath)}`;
+                const resp = await fetch(url);
+                if (!resp.ok) return;
+                const data = await resp.json();
+                const items = data.items || [];
+
+                items.forEach((name) => {
+                    const item = document.createElement('div');
+                    item.className = 'dir-browser-item';
+                    item.textContent = name;
+                    item.onclick = () => {
+                        if (browsePath === '') {
+                            browsePath = name;
+                        } else {
+                            browsePath = browsePath + (browsePath.endsWith('\\') ? '' : '\\') + name;
+                        }
+                        loadBrowseDir(tkn);
+                    };
+                    browserListEl.appendChild(item);
+                });
+
+                if (items.length === 0) {
+                    const empty = document.createElement('div');
+                    empty.className = 'dir-browser-empty';
+                    empty.textContent = 'No subdirectories';
+                    browserListEl.appendChild(empty);
+                }
+            } catch (err) {
+                console.error('Failed to browse directory:', err);
+            }
+        }
+
+        function updateBreadcrumb() {
+            breadcrumbEl.innerHTML = '';
+
+            // Root item
+            const rootSpan = document.createElement('span');
+            rootSpan.className = 'breadcrumb-item';
+            rootSpan.textContent = 'Drives';
+            rootSpan.onclick = () => {
+                browsePath = '';
+                loadBrowseDir(token);
+            };
+            breadcrumbEl.appendChild(rootSpan);
+
+            if (!browsePath) return;
+
+            // Split path into segments
+            const parts = browsePath.split('\\').filter(Boolean);
+            let accumulated = '';
+            parts.forEach((part, i) => {
+                const sep = document.createElement('span');
+                sep.className = 'breadcrumb-sep';
+                sep.textContent = ' > ';
+                breadcrumbEl.appendChild(sep);
+
+                if (i === 0 && part.endsWith(':')) {
+                    accumulated = part + '\\';
+                } else {
+                    accumulated = accumulated + (accumulated.endsWith('\\') ? '' : '\\') + part;
+                }
+
+                const span = document.createElement('span');
+                span.className = 'breadcrumb-item';
+                span.textContent = part;
+                const pathSnapshot = accumulated;
+                span.onclick = () => {
+                    browsePath = pathSnapshot;
+                    loadBrowseDir(token);
+                };
+                breadcrumbEl.appendChild(span);
+            });
+        }
     }
 
     async function loadDirHistory(token) {

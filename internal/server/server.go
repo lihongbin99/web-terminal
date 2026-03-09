@@ -8,6 +8,8 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"web-terminal/internal/auth"
@@ -45,6 +47,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/api/login", s.handleLogin)
 	mux.HandleFunc("/ws/terminal", s.handleTerminal)
 	mux.HandleFunc("/api/dirs", s.handleDirs)
+	mux.HandleFunc("/api/browse", s.handleBrowse)
 	mux.Handle("/", http.FileServer(http.FS(s.webFS)))
 
 	addr := fmt.Sprintf(":%d", s.cfg.Server.Port)
@@ -211,6 +214,50 @@ func (s *Server) handleDirs(w http.ResponseWriter, r *http.Request) {
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	}
+}
+
+func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	token := r.URL.Query().Get("token")
+	if !s.auth.ValidateToken(token) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	dirPath := r.URL.Query().Get("path")
+
+	// If path is empty, return drive letters on Windows
+	if dirPath == "" {
+		var drives []string
+		for c := 'A'; c <= 'Z'; c++ {
+			drive := string(c) + `:\`
+			if _, err := os.Stat(drive); err == nil {
+				drives = append(drives, drive)
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"items": drives})
+		return
+	}
+
+	// Clean path and list subdirectories
+	dirPath = filepath.Clean(dirPath)
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Cannot read directory"})
+		return
+	}
+
+	var dirs []string
+	for _, entry := range entries {
+		if entry.IsDir() {
+			dirs = append(dirs, entry.Name())
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"items": dirs})
 }
 
 func queryInt(r *http.Request, key string, defaultVal int) int {

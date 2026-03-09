@@ -44,6 +44,7 @@ func (s *Server) Start() error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/login", s.handleLogin)
 	mux.HandleFunc("/ws/terminal", s.handleTerminal)
+	mux.HandleFunc("/api/dirs", s.handleDirs)
 	mux.Handle("/", http.FileServer(http.FS(s.webFS)))
 
 	addr := fmt.Sprintf(":%d", s.cfg.Server.Port)
@@ -113,6 +114,7 @@ func (s *Server) handleTerminal(w http.ResponseWriter, r *http.Request) {
 
 	cols := queryInt(r, "cols", 80)
 	rows := queryInt(r, "rows", 24)
+	workDir := r.URL.Query().Get("workDir")
 
 	conn, err := s.upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -121,13 +123,17 @@ func (s *Server) handleTerminal(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	term, err := terminal.New(s.cfg.Terminal.Shell, cols, rows)
+	term, err := terminal.New(s.cfg.Terminal.Shell, cols, rows, workDir)
 	if err != nil {
 		log.Printf("Terminal creation error: %v", err)
 		conn.WriteMessage(websocket.TextMessage, []byte(fmt.Sprintf("\r\n[Error: %v]\r\n", err)))
 		return
 	}
 	defer term.Close()
+
+	if workDir != "" {
+		s.auth.RecordDir(workDir)
+	}
 
 	// Terminal output -> WebSocket
 	go func() {
@@ -172,6 +178,39 @@ func writeJSON(w http.ResponseWriter, status int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(v)
+}
+
+func (s *Server) handleDirs(w http.ResponseWriter, r *http.Request) {
+	token := r.URL.Query().Get("token")
+	if !s.auth.ValidateToken(token) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		dirs, err := s.auth.GetDirs(20)
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to get dirs"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"dirs": dirs})
+	case http.MethodPost:
+		var req struct {
+			Path string `json:"path"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Path == "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "Invalid request"})
+			return
+		}
+		if err := s.auth.RecordDir(req.Path); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to record dir"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 func queryInt(r *http.Request, key string, defaultVal int) int {

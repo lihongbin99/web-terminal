@@ -50,6 +50,10 @@ func initDB(db *sql.DB) error {
 			blocked_until DATETIME NOT NULL
 		);
 		CREATE INDEX IF NOT EXISTS idx_login_failures_ip ON login_failures(ip, attempted_at);
+		CREATE TABLE IF NOT EXISTS dir_history (
+			path TEXT PRIMARY KEY,
+			last_used_at DATETIME NOT NULL DEFAULT (datetime('now'))
+		);
 	`)
 	return err
 }
@@ -135,6 +139,34 @@ func (s *AuthService) ValidateToken(token string) bool {
 	s.tokenMu.RLock()
 	defer s.tokenMu.RUnlock()
 	return s.tokens[token]
+}
+
+func (s *AuthService) GetDirs(limit int) ([]string, error) {
+	rows, err := s.db.Query(
+		"SELECT path FROM dir_history ORDER BY last_used_at DESC LIMIT ?", limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var dirs []string
+	for rows.Next() {
+		var path string
+		if err := rows.Scan(&path); err != nil {
+			return nil, err
+		}
+		dirs = append(dirs, path)
+	}
+	return dirs, rows.Err()
+}
+
+func (s *AuthService) RecordDir(path string) error {
+	_, err := s.db.Exec(
+		`INSERT INTO dir_history (path, last_used_at) VALUES (?, datetime('now'))
+		 ON CONFLICT(path) DO UPDATE SET last_used_at = datetime('now')`, path,
+	)
+	return err
 }
 
 func (s *AuthService) Close() error {

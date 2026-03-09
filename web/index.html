@@ -38,6 +38,7 @@
                     <button id="dir-close-btn" type="button" class="dir-close">Close</button>
                 </div>
             </div>
+            <div id="session-list"></div>
             <div id="dir-list"></div>
             <button id="dir-default-btn" type="button" class="dir-default">Use Default Directory</button>
         </div>
@@ -50,10 +51,20 @@
             <button data-key="ctrl-c">Ctrl+C</button>
             <button data-key="esc">Esc</button>
             <button data-key="tab">Tab</button>
-            <button data-key="up">↑</button>
-            <button data-key="down">↓</button>
-            <button data-key="left">←</button>
-            <button data-key="right">→</button>
+            <button data-key="up">&#8593;</button>
+            <button data-key="down">&#8595;</button>
+            <button data-key="left">&#8592;</button>
+            <button data-key="right">&#8594;</button>
+            <button id="sessions-btn">Sessions</button>
+        </div>
+    </div>
+
+    <!-- Session Overlay -->
+    <div id="session-overlay" style="display:none;">
+        <div class="session-overlay-box">
+            <h2>Sessions</h2>
+            <div id="session-overlay-list"></div>
+            <button id="session-overlay-close" class="dir-close">Close</button>
         </div>
     </div>
 

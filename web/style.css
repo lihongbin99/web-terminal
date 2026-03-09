@@ -124,6 +124,12 @@ body {
     background: #007acc;
 }
 
+#sessions-btn {
+    margin-left: auto;
+    background: #2a4a6b !important;
+    border-color: #007acc !important;
+}
+
 /* Directory Selection */
 #dir-container {
     display: flex;
@@ -318,4 +324,152 @@ body {
 .dir-default:hover {
     border-color: #007acc;
     color: #ccc;
+}
+
+/* Session List */
+.session-list-header {
+    font-size: 13px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+    margin-top: 4px;
+}
+
+#session-list {
+    margin-bottom: 16px;
+}
+
+.session-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: #3c3c3c;
+    border: 1px solid #444;
+    border-radius: 4px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.session-item:hover {
+    background: #4a4a4a;
+    border-color: #007acc;
+}
+
+.session-item-active {
+    border-color: #007acc;
+    background: #2a3a4a;
+}
+
+.session-item-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    flex: 1;
+}
+
+.session-item-name {
+    color: #ddd;
+    font-family: Consolas, monospace;
+    font-size: 13px;
+    word-break: break-all;
+}
+
+.session-item-time {
+    color: #777;
+    font-size: 11px;
+}
+
+.session-item-badge {
+    display: inline-block;
+    background: #007acc;
+    color: #fff;
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    margin-top: 2px;
+    width: fit-content;
+}
+
+.session-item-actions {
+    display: flex;
+    gap: 6px;
+    margin-left: 12px;
+    flex-shrink: 0;
+}
+
+.session-connect-btn {
+    padding: 5px 12px;
+    background: #007acc;
+    border: none;
+    border-radius: 3px;
+    color: #fff;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.session-connect-btn:hover {
+    background: #005f9e;
+}
+
+.session-delete-btn {
+    padding: 5px 12px;
+    background: #555;
+    border: none;
+    border-radius: 3px;
+    color: #ccc;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.session-delete-btn:hover {
+    background: #c44;
+    color: #fff;
+}
+
+/* Session Overlay */
+#session-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.session-overlay-box {
+    background: #2d2d2d;
+    border: 1px solid #444;
+    border-radius: 8px;
+    padding: 24px;
+    width: 480px;
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.session-overlay-box h2 {
+    color: #fff;
+    font-size: 18px;
+    margin-bottom: 16px;
+}
+
+#session-overlay-list {
+    margin-bottom: 16px;
+}
+
+#session-overlay-close {
+    width: 100%;
+    padding: 8px;
+    border: none;
+    border-radius: 4px;
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
 }

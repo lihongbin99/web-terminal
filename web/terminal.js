@@ -1,6 +1,12 @@
 (function () {
     const TOKEN_KEY = 'web-terminal-token';
 
+    let currentToken = null;
+    let currentSessionId = null;
+    let currentWs = null;
+    let currentTerm = null;
+    let currentFitAddon = null;
+
     // Check existing session
     const savedToken = localStorage.getItem(TOKEN_KEY);
     if (savedToken) {
@@ -41,16 +47,18 @@
     });
 
     function showDirSelection(token) {
+        currentToken = token;
         document.getElementById('login-container').style.display = 'none';
         document.getElementById('terminal-container').style.display = 'none';
         document.getElementById('dir-container').style.display = 'flex';
+        loadSessions(token);
         loadDirHistory(token);
 
-        // Open button
+        // Open button — create new session
         document.getElementById('dir-go-btn').onclick = () => {
             const dir = document.getElementById('dir-input').value.trim();
             if (dir) {
-                openTerminal(token, dir);
+                createSessionAndConnect(token, dir);
             }
         };
 
@@ -59,14 +67,14 @@
             if (e.key === 'Enter') {
                 const dir = document.getElementById('dir-input').value.trim();
                 if (dir) {
-                    openTerminal(token, dir);
+                    createSessionAndConnect(token, dir);
                 }
             }
         });
 
         // Default directory button
         document.getElementById('dir-default-btn').onclick = () => {
-            openTerminal(token, '');
+            createSessionAndConnect(token, '');
         };
 
         // Browse button
@@ -172,6 +180,74 @@
         }
     }
 
+    async function loadSessions(token) {
+        const listEl = document.getElementById('session-list');
+        listEl.innerHTML = '';
+
+        try {
+            const resp = await fetch(`/api/sessions?token=${encodeURIComponent(token)}`);
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const sessions = data.sessions || [];
+
+            if (sessions.length === 0) return;
+
+            const header = document.createElement('div');
+            header.className = 'session-list-header';
+            header.textContent = 'Active Sessions';
+            listEl.appendChild(header);
+
+            sessions.forEach((sess) => {
+                const item = document.createElement('div');
+                item.className = 'session-item';
+
+                const info = document.createElement('div');
+                info.className = 'session-item-info';
+
+                const name = document.createElement('span');
+                name.className = 'session-item-name';
+                name.textContent = sess.name;
+                info.appendChild(name);
+
+                const time = document.createElement('span');
+                time.className = 'session-item-time';
+                time.textContent = new Date(sess.createdAt).toLocaleString();
+                info.appendChild(time);
+
+                const actions = document.createElement('div');
+                actions.className = 'session-item-actions';
+
+                const connectBtn = document.createElement('button');
+                connectBtn.className = 'session-connect-btn';
+                connectBtn.textContent = 'Connect';
+                connectBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    connectToSession(token, sess.id);
+                };
+                actions.appendChild(connectBtn);
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'session-delete-btn';
+                deleteBtn.textContent = 'Delete';
+                deleteBtn.onclick = async (e) => {
+                    e.stopPropagation();
+                    await fetch(`/api/sessions?token=${encodeURIComponent(token)}&id=${encodeURIComponent(sess.id)}`, {
+                        method: 'DELETE',
+                    });
+                    loadSessions(token);
+                };
+                actions.appendChild(deleteBtn);
+
+                item.appendChild(info);
+                item.appendChild(actions);
+                item.onclick = () => connectToSession(token, sess.id);
+                listEl.appendChild(item);
+            });
+        } catch (err) {
+            console.error('Failed to load sessions:', err);
+        }
+    }
+
     async function loadDirHistory(token) {
         const listEl = document.getElementById('dir-list');
         listEl.innerHTML = '';
@@ -188,11 +264,18 @@
             const data = await resp.json();
             const dirs = data.dirs || [];
 
+            if (dirs.length > 0) {
+                const header = document.createElement('div');
+                header.className = 'session-list-header';
+                header.textContent = 'Recent Directories';
+                listEl.appendChild(header);
+            }
+
             dirs.forEach((dir) => {
                 const item = document.createElement('div');
                 item.className = 'dir-item';
                 item.textContent = dir;
-                item.onclick = () => openTerminal(token, dir);
+                item.onclick = () => createSessionAndConnect(token, dir);
                 listEl.appendChild(item);
             });
         } catch (err) {
@@ -200,13 +283,47 @@
         }
     }
 
-    function openTerminal(token, workDir) {
-        document.getElementById('dir-container').style.display = 'none';
-        document.getElementById('terminal-container').style.display = 'flex';
-        initTerminal(token, workDir);
+    async function createSessionAndConnect(token, workDir) {
+        try {
+            const resp = await fetch(`/api/sessions?token=${encodeURIComponent(token)}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: workDir || 'Default', workDir, cols: 80, rows: 24 }),
+            });
+            if (!resp.ok) {
+                const data = await resp.json();
+                alert(data.error || 'Failed to create session');
+                return;
+            }
+            const data = await resp.json();
+            connectToSession(token, data.id);
+        } catch (err) {
+            console.error('Failed to create session:', err);
+        }
     }
 
-    function initTerminal(token, workDir) {
+    function connectToSession(token, sessionId) {
+        currentSessionId = sessionId;
+        document.getElementById('dir-container').style.display = 'none';
+        document.getElementById('terminal-container').style.display = 'flex';
+        initTerminal(token, sessionId);
+    }
+
+    function initTerminal(token, sessionId) {
+        // Clean up previous terminal if switching sessions
+        if (currentWs) {
+            currentWs.onclose = null;
+            currentWs.close();
+            currentWs = null;
+        }
+        if (currentTerm) {
+            currentTerm.dispose();
+            currentTerm = null;
+        }
+
+        const container = document.getElementById('terminal');
+        container.innerHTML = '';
+
         const term = new Terminal({
             cursorBlink: true,
             fontSize: 14,
@@ -223,25 +340,27 @@
         term.loadAddon(fitAddon);
         term.loadAddon(webLinksAddon);
 
-        const container = document.getElementById('terminal');
         term.open(container);
         fitAddon.fit();
         setTimeout(() => fitAddon.fit(), 50);
 
+        currentTerm = term;
+        currentFitAddon = fitAddon;
+
         // WebSocket connection
         const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-        let wsUrl = `${protocol}//${location.host}/ws/terminal?token=${encodeURIComponent(token)}&cols=${term.cols}&rows=${term.rows}`;
-        if (workDir) {
-            wsUrl += `&workDir=${encodeURIComponent(workDir)}`;
-        }
+        const wsUrl = `${protocol}//${location.host}/ws/terminal?token=${encodeURIComponent(token)}&sessionId=${encodeURIComponent(sessionId)}`;
         const ws = new WebSocket(wsUrl);
         ws.binaryType = 'arraybuffer';
+        currentWs = ws;
 
         ws.onopen = () => {
             term.focus();
+            // Send initial resize
+            ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
         };
 
-        // Toolbar buttons
+        // Toolbar shortcut buttons
         const keyMap = {
             'ctrl-c': '\x03',
             'esc': '\x1b',
@@ -251,15 +370,20 @@
             'left': '\x1b[D',
             'right': '\x1b[C',
         };
-        document.querySelectorAll('#terminal-toolbar button').forEach((btn) => {
-            btn.addEventListener('click', () => {
+        document.querySelectorAll('#terminal-toolbar button[data-key]').forEach((btn) => {
+            btn.onclick = () => {
                 const seq = keyMap[btn.dataset.key];
                 if (seq && ws.readyState === WebSocket.OPEN) {
                     ws.send(seq);
                 }
                 term.focus();
-            });
+            };
         });
+
+        // Sessions button in toolbar
+        document.getElementById('sessions-btn').onclick = () => {
+            showSessionOverlay(token);
+        };
 
         ws.onmessage = (event) => {
             const data = typeof event.data === 'string' ? event.data : new TextDecoder().decode(event.data);
@@ -267,15 +391,16 @@
         };
 
         ws.onclose = () => {
-            term.write('\r\n\x1b[31m[Connection closed. Press any key to reconnect...]\x1b[0m\r\n');
-            term.onData(() => {
-                location.reload();
+            term.write('\r\n\x1b[33m[Disconnected from session. Session is still running on server.]\x1b[0m\r\n');
+            term.write('\x1b[33m[Press any key to reconnect...]\x1b[0m\r\n');
+            const disposable = term.onData(() => {
+                disposable.dispose();
+                initTerminal(token, sessionId);
             });
         };
 
         ws.onerror = () => {
             term.write('\r\n\x1b[31m[Connection error]\x1b[0m\r\n');
-            localStorage.removeItem(TOKEN_KEY);
         };
 
         // Send user input to server
@@ -303,5 +428,108 @@
                 location.reload();
             }
         });
+    }
+
+    async function showSessionOverlay(token) {
+        const overlay = document.getElementById('session-overlay');
+        const listEl = document.getElementById('session-overlay-list');
+        overlay.style.display = 'flex';
+        listEl.innerHTML = '';
+
+        document.getElementById('session-overlay-close').onclick = () => {
+            overlay.style.display = 'none';
+            if (currentTerm) currentTerm.focus();
+        };
+
+        // Close on background click
+        overlay.onclick = (e) => {
+            if (e.target === overlay) {
+                overlay.style.display = 'none';
+                if (currentTerm) currentTerm.focus();
+            }
+        };
+
+        try {
+            const resp = await fetch(`/api/sessions?token=${encodeURIComponent(token)}`);
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const sessions = data.sessions || [];
+
+            if (sessions.length === 0) {
+                listEl.innerHTML = '<div class="dir-browser-empty">No active sessions</div>';
+                return;
+            }
+
+            sessions.forEach((sess) => {
+                const item = document.createElement('div');
+                item.className = 'session-item' + (sess.id === currentSessionId ? ' session-item-active' : '');
+
+                const info = document.createElement('div');
+                info.className = 'session-item-info';
+
+                const name = document.createElement('span');
+                name.className = 'session-item-name';
+                name.textContent = sess.name;
+                info.appendChild(name);
+
+                const time = document.createElement('span');
+                time.className = 'session-item-time';
+                time.textContent = new Date(sess.createdAt).toLocaleString();
+                info.appendChild(time);
+
+                if (sess.id === currentSessionId) {
+                    const badge = document.createElement('span');
+                    badge.className = 'session-item-badge';
+                    badge.textContent = 'current';
+                    info.appendChild(badge);
+                }
+
+                const actions = document.createElement('div');
+                actions.className = 'session-item-actions';
+
+                if (sess.id !== currentSessionId) {
+                    const switchBtn = document.createElement('button');
+                    switchBtn.className = 'session-connect-btn';
+                    switchBtn.textContent = 'Switch';
+                    switchBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        overlay.style.display = 'none';
+                        initTerminal(token, sess.id);
+                        currentSessionId = sess.id;
+                    };
+                    actions.appendChild(switchBtn);
+                }
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'session-delete-btn';
+                deleteBtn.textContent = 'Delete';
+                deleteBtn.onclick = async (e) => {
+                    e.stopPropagation();
+                    await fetch(`/api/sessions?token=${encodeURIComponent(token)}&id=${encodeURIComponent(sess.id)}`, {
+                        method: 'DELETE',
+                    });
+                    if (sess.id === currentSessionId) {
+                        overlay.style.display = 'none';
+                        showDirSelection(token);
+                        return;
+                    }
+                    showSessionOverlay(token);
+                };
+                actions.appendChild(deleteBtn);
+
+                item.appendChild(info);
+                item.appendChild(actions);
+                if (sess.id !== currentSessionId) {
+                    item.onclick = () => {
+                        overlay.style.display = 'none';
+                        initTerminal(token, sess.id);
+                        currentSessionId = sess.id;
+                    };
+                }
+                listEl.appendChild(item);
+            });
+        } catch (err) {
+            console.error('Failed to load sessions:', err);
+        }
     }
 })();

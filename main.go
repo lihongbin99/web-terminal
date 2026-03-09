@@ -8,6 +8,7 @@ import (
 	"web-terminal/internal/auth"
 	"web-terminal/internal/config"
 	"web-terminal/internal/server"
+	"web-terminal/internal/session"
 )
 
 //go:embed web/*
@@ -28,7 +29,9 @@ func main() {
 	}
 	defer authSvc.Close()
 
-	srv, err := server.New(cfg, authSvc, webContent)
+	sessMgr := session.NewSessionManager(cfg.Terminal.Shell)
+
+	srv, err := server.New(cfg, authSvc, sessMgr, webContent)
 	if err != nil {
 		log.Fatalf("Failed to create server: %v", err)
 	}

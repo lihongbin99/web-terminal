@@ -83,7 +83,10 @@
         };
 
         ws.onclose = () => {
-            term.write('\r\n\x1b[31m[Connection closed]\x1b[0m\r\n');
+            term.write('\r\n\x1b[31m[Connection closed. Press any key to reconnect...]\x1b[0m\r\n');
+            term.onData(() => {
+                location.reload();
+            });
         };
 
         ws.onerror = () => {
@@ -106,6 +109,14 @@
         term.onResize(({ cols, rows }) => {
             if (ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ type: 'resize', cols, rows }));
+            }
+        });
+
+        // Ctrl+Shift+L to logout
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey && e.shiftKey && e.key === 'L') {
+                localStorage.removeItem(TOKEN_KEY);
+                location.reload();
             }
         });
     }

@@ -15,11 +15,14 @@ type Terminal struct {
 	mu     sync.Mutex
 }
 
-func New(shell string, cols, rows int) (*Terminal, error) {
-	cpty, err := conpty.Start(
-		shell,
+func New(shell string, cols, rows int, workDir string) (*Terminal, error) {
+	opts := []conpty.ConPtyOption{
 		conpty.ConPtyDimensions(cols, rows),
-	)
+	}
+	if workDir != "" {
+		opts = append(opts, conpty.ConPtyWorkDir(workDir))
+	}
+	cpty, err := conpty.Start(shell, opts...)
 	if err != nil {
 		return nil, err
 	}

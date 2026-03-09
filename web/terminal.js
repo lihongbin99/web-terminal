@@ -202,7 +202,7 @@
 
     function openTerminal(token, workDir) {
         document.getElementById('dir-container').style.display = 'none';
-        document.getElementById('terminal-container').style.display = 'block';
+        document.getElementById('terminal-container').style.display = 'flex';
         initTerminal(token, workDir);
     }
 
@@ -226,6 +226,7 @@
         const container = document.getElementById('terminal');
         term.open(container);
         fitAddon.fit();
+        setTimeout(() => fitAddon.fit(), 50);
 
         // WebSocket connection
         const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -239,6 +240,26 @@
         ws.onopen = () => {
             term.focus();
         };
+
+        // Toolbar buttons
+        const keyMap = {
+            'ctrl-c': '\x03',
+            'esc': '\x1b',
+            'tab': '\t',
+            'up': '\x1b[A',
+            'down': '\x1b[B',
+            'left': '\x1b[D',
+            'right': '\x1b[C',
+        };
+        document.querySelectorAll('#terminal-toolbar button').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const seq = keyMap[btn.dataset.key];
+                if (seq && ws.readyState === WebSocket.OPEN) {
+                    ws.send(seq);
+                }
+                term.focus();
+            });
+        });
 
         ws.onmessage = (event) => {
             const data = typeof event.data === 'string' ? event.data : new TextDecoder().decode(event.data);

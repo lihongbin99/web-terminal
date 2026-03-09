@@ -81,11 +81,47 @@ body {
 #terminal-container {
     height: 100vh;
     width: 100vw;
+    display: flex;
+    flex-direction: column;
 }
 
 #terminal {
-    height: 100%;
+    flex: 1;
     width: 100%;
+    min-height: 0;
+    overflow: hidden;
+}
+
+#terminal-toolbar {
+    display: flex;
+    gap: 6px;
+    padding: 6px 8px;
+    background: #1a1a1a;
+    border-top: 1px solid #333;
+    flex-shrink: 0;
+}
+
+#terminal-toolbar button {
+    padding: 6px 12px;
+    background: #333;
+    border: 1px solid #555;
+    border-radius: 4px;
+    color: #ccc;
+    font-family: Consolas, monospace;
+    font-size: 13px;
+    cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+#terminal-toolbar button:hover {
+    background: #444;
+    border-color: #007acc;
+    color: #fff;
+}
+
+#terminal-toolbar button:active {
+    background: #007acc;
 }
 
 /* Directory Selection */

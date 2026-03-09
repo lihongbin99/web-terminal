@@ -1,0 +1,9 @@
+server:
+  port: 8080
+auth:
+  username: admin
+  password: changeme
+  max_attempts: 5
+  block_duration: 30m
+terminal:
+  shell: cmd.exe

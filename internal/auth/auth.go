@@ -3,7 +3,6 @@ package auth
 import (
 	"database/sql"
 	"fmt"
-	"sync"
 	"time"
 
 	"web-terminal/internal/config"
@@ -13,10 +12,8 @@ import (
 )
 
 type AuthService struct {
-	cfg     *config.AuthConfig
-	db      *sql.DB
-	tokens  map[string]bool // active session tokens
-	tokenMu sync.RWMutex
+	cfg *config.AuthConfig
+	db  *sql.DB
 }
 
 func New(cfg *config.AuthConfig, dbPath string) (*AuthService, error) {
@@ -31,9 +28,8 @@ func New(cfg *config.AuthConfig, dbPath string) (*AuthService, error) {
 	}
 
 	return &AuthService{
-		cfg:    cfg,
-		db:     db,
-		tokens: make(map[string]bool),
+		cfg: cfg,
+		db:  db,
 	}, nil
 }
 
@@ -50,6 +46,10 @@ func initDB(db *sql.DB) error {
 			blocked_until DATETIME NOT NULL
 		);
 		CREATE INDEX IF NOT EXISTS idx_login_failures_ip ON login_failures(ip, attempted_at);
+		CREATE TABLE IF NOT EXISTS tokens (
+			token TEXT PRIMARY KEY,
+			created_at DATETIME NOT NULL DEFAULT (datetime('now'))
+		);
 		CREATE TABLE IF NOT EXISTS dir_history (
 			path TEXT PRIMARY KEY,
 			last_used_at DATETIME NOT NULL DEFAULT (datetime('now'))
@@ -126,9 +126,10 @@ func (s *AuthService) Login(username, password, ip string) (string, error) {
 	}
 
 	token := uuid.New().String()
-	s.tokenMu.Lock()
-	s.tokens[token] = true
-	s.tokenMu.Unlock()
+	_, err = s.db.Exec("INSERT INTO tokens (token) VALUES (?)", token)
+	if err != nil {
+		return "", fmt.Errorf("save token: %w", err)
+	}
 
 	s.db.Exec("DELETE FROM login_failures WHERE ip = ?", ip)
 
@@ -136,9 +137,9 @@ func (s *AuthService) Login(username, password, ip string) (string, error) {
 }
 
 func (s *AuthService) ValidateToken(token string) bool {
-	s.tokenMu.RLock()
-	defer s.tokenMu.RUnlock()
-	return s.tokens[token]
+	var count int
+	err := s.db.QueryRow("SELECT COUNT(*) FROM tokens WHERE token = ?", token).Scan(&count)
+	return err == nil && count > 0
 }
 
 func (s *AuthService) GetDirs(limit int) ([]string, error) {
